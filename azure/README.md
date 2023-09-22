@@ -36,18 +36,21 @@ git clone https://github.com/jhunjhun/resource-counter/azure-resource-counter.gi
 ```bash
 cd azure-resource-counter
 ```
+3. Install the required Python packages using pip:
+```bash
+pip install -r requirements.txt
 
-3. Run the script:
+4. Run the script:
 ```bash
 python azure_resource_counter.py
 ```
-4. you will be prompted to enter the Azure Client ID, Client Secret, and Tenant ID. Provide these details to authenticate the script.
+5. you will be prompted to enter the Azure Client ID, Client Secret, and Tenant ID. Provide these details to authenticate the script.
 
-5. Select an option:
+6. Select an option:
   1. Process all subscriptions with progress bar: Counts resources in all Azure subscriptions.
   2. Process a single subscription: Counts resources in a single Azure subscription by entering its ID.
 
-6. The script will start counting resources and save the results in a CSV file named **azure_resource_counts.csv** .
+7. The script will start counting resources and save the results in a CSV file named **azure_resource_counts.csv** .
 
 ## Permissions
 To ensure that the script can count resources in your Azure subscription, grant the Service Principal the following permissions:
