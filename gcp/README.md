@@ -47,17 +47,21 @@ Before running the script, ensure you have the following:
 1. Clone this repository to your local machine:
 
    ```bash
-   git clone https://github.com/yjhunjhun/gcp-resource-counter.git
+  https://github.com/yjhunjhun/resource-counter.git
 
 2. Navigate to the project directory:
    ```bash
-   cd gcp-resource-counter
+   cd resource-counter/gcp
 
 3. Navigate to the project directory:
    ```bash
    pip install -r requirements.txt
 
-4. Choose an option to run the script:
+4. To count AWS resources, run the script and follow the prompts.
+   ```shell
+   python3 gcp-resource-counter.py
+
+5. Choose an option to run the script:
   Option 1: Run for an entire organization
     - Enter your organization ID when prompted.
     - Provide the path to your service account key JSON file when prompted.
