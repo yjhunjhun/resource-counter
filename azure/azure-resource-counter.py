@@ -10,20 +10,46 @@ from azure.mgmt.containerservice import ContainerServiceClient
 from azure.mgmt.containerregistry import ContainerRegistryManagementClient
 from tqdm import tqdm
 import threading
+import os
+
+# Constants
+CSV_FILE_PATH = 'azure_resource_counts.csv'
+ERROR_LOG_FILE_PATH = 'azure_resource_counts_error.log'
 
 # Configure logging
 logging.basicConfig(filename='azure_resource_counts.log', level=logging.INFO, format='%(asctime)s - %(levelname)s: %(message)s')
+error_logger = logging.getLogger('azure_errors')
+error_logger.setLevel(logging.ERROR)
 
-#Authenticate and return an Azure client credential.
+# Set the log level for the "azure" logger to WARNING to exclude request logs
+azure_logger = logging.getLogger('azure')
+azure_logger.setLevel(logging.WARNING)
+
+# Authenticate and return an Azure client credential.
 def authenticate_client(client_id, client_secret, tenant_id):
     credential = ClientSecretCredential(tenant_id, client_id, client_secret)
     return credential
 
-#List Azure subscriptions using the provided credential
+# List Azure subscriptions using the provided credential
 def list_subscriptions(credential):
     subscription_client = SubscriptionClient(credential)
     return list(subscription_client.subscriptions.list())
 
+# Function to count resources in a resource group
+def count_resources_in_resource_group(credential, subscription_id, resource_group, result_dict):
+    counts = {
+        "Virtual Machines": count_virtual_machines(credential, subscription_id, resource_group),
+        "Web Apps": count_web_apps(credential, subscription_id, resource_group),
+        "Container Instances": count_container_instances(credential, subscription_id, resource_group),
+        "AKS Clusters": count_aks_clusters(credential, subscription_id, resource_group),
+        "ACR Registries": count_acr_registries(credential, subscription_id, resource_group),
+        "ACR Images": count_acr_images(credential, subscription_id, resource_group),
+        "Azure Functions": count_azure_functions(credential, subscription_id, resource_group),
+    }
+
+    result_dict[resource_group] = counts
+
+# Function to count virtual machines in a resource group
 def count_virtual_machines(credential, subscription_id, resource_group):
     compute_client = ComputeManagementClient(credential, subscription_id)
     total_vm_count = 0
@@ -38,6 +64,7 @@ def count_virtual_machines(credential, subscription_id, resource_group):
         logging.error(f"Error counting VMs in {resource_group}: {str(e)}")
         return 0
 
+# Function to count web apps in a resource group
 def count_web_apps(credential, subscription_id, resource_group):
     website_client = WebSiteManagementClient(credential, subscription_id)
     total_web_app_count = 0
@@ -52,6 +79,7 @@ def count_web_apps(credential, subscription_id, resource_group):
         logging.error(f"Error counting Web Apps in {resource_group}: {str(e)}")
         return 0
 
+# Function to count container instances in a resource group
 def count_container_instances(credential, subscription_id, resource_group):
     container_instance_client = ContainerInstanceManagementClient(credential, subscription_id)
     total_aci_count = 0
@@ -66,6 +94,7 @@ def count_container_instances(credential, subscription_id, resource_group):
         logging.error(f"Error counting ACIs in {resource_group}: {str(e)}")
         return 0
 
+# Function to count AKS clusters in a resource group
 def count_aks_clusters(credential, subscription_id, resource_group):
     container_service_client = ContainerServiceClient(credential, subscription_id)
     total_aks_count = 0
@@ -80,20 +109,24 @@ def count_aks_clusters(credential, subscription_id, resource_group):
         logging.error(f"Error counting AKS clusters in {resource_group}: {str(e)}")
         return 0
 
-def count_acr_repositories(credential, subscription_id, resource_group):
+# Function to count ACR registries in a resource group
+def count_acr_registries(credential, subscription_id, resource_group):
     container_registry_client = ContainerRegistryManagementClient(credential, subscription_id)
-    total_acr_repo_count = 0
+    total_acr_registry_count = 0
 
     try:
-        acr_repos = container_registry_client.registries.list_by_resource_group(resource_group)
-        for _ in acr_repos:
-            total_acr_repo_count += 1
+        acr_registries = container_registry_client.registries.list_by_resource_group(resource_group)
+        for _ in acr_registries:
+            total_acr_registry_count += 1
 
-        return total_acr_repo_count
+        return total_acr_registry_count
     except Exception as e:
-        logging.error(f"Error counting ACR repositories in {resource_group}: {str(e)}")
+        logging.error(f"Error counting ACR registries in {resource_group}: {str(e)}")
         return 0
 
+
+
+# Function to count ACR images in a resource group
 def count_acr_images(credential, subscription_id, resource_group):
     container_registry_client = ContainerRegistryManagementClient(credential, subscription_id)
     total_acr_image_count = 0
@@ -101,55 +134,57 @@ def count_acr_images(credential, subscription_id, resource_group):
     try:
         acr_repos = container_registry_client.registries.list_by_resource_group(resource_group)
         for repo in acr_repos:
-            repo_name = repo.name
-            acr_client = container_registry_client.registries.get(resource_group, repo_name)
-            acr_images = list(acr_client.list_manifests(repo_name))
-            total_acr_image_count += len(acr_images)
+            if hasattr(repo, 'registry_name'):
+                registry_name = repo.registry_name
+
+                # List the repositories in the registry
+                repositories = container_registry_client.repositories.list(resource_group, registry_name)
+
+                for repository in repositories:
+                    # List the manifests within each repository
+                    manifests = container_registry_client.manifests.list(resource_group, registry_name, repository)
+                    total_acr_image_count += len(list(manifests))
 
         return total_acr_image_count
     except Exception as e:
-        logging.error(f"Error counting ACR images in {resource_group}: {str(e)}")
+        error_logger.error(f"Error counting ACR images in {resource_group}: {str(e)}")
         return 0
 
+# Function to count Azure Functions in a resource group
 def count_azure_functions(credential, subscription_id, resource_group):
     web_client = WebSiteManagementClient(credential, subscription_id)
     total_azure_functions = 0
 
     try:
-        function_apps = web_client.app_service_plans.list_by_resource_group(resource_group)
-        for app_service_plan in function_apps:
-            if "FunctionApp" in app_service_plan.name:
-                function_apps = web_client.web_apps.list_by_resource_group(resource_group)
-                total_azure_functions += sum(1 for _ in function_apps)
+        web_apps = web_client.web_apps.list_by_resource_group(resource_group)
+        for app in web_apps:
+            if app.kind and "functionapp" in app.kind.lower():
+                total_azure_functions += 1
 
         return total_azure_functions
     except Exception as e:
         logging.error(f"Error counting Azure Functions in {resource_group}: {str(e)}")
         return 0
 
-def count_resources_in_resource_group(credential, subscription_id, resource_group, result_dict):
-    result_dict[resource_group] = {
-        "Virtual Machines": count_virtual_machines(credential, subscription_id, resource_group),
-        "Web Apps": count_web_apps(credential, subscription_id, resource_group),
-        "Container Instances": count_container_instances(credential, subscription_id, resource_group),
-        "AKS Clusters": count_aks_clusters(credential, subscription_id, resource_group),
-        "ACR Repositories": count_acr_repositories(credential, subscription_id, resource_group),
-        "ACR Images": count_acr_images(credential, subscription_id, resource_group),
-        "Azure Functions": count_azure_functions(credential, subscription_id, resource_group),
-    }
 
-def process_subscription_with_progress_bar(credential, subscription, csv_writer):
+
+
+# Function to process a subscription and append counts to CSV
+def process_subscription(credential, subscription, csv_writer):
     subscription_id = subscription.subscription_id
-    logging.info(f"Subscription ID: {subscription_id}")
+    logging.info(f"Processing Subscription ID: {subscription_id}")
 
+    # Retrieve the list of resource groups in the subscription
     resource_groups = ResourceManagementClient(credential, subscription_id).resource_groups.list()
 
+    # Create a dictionary to store counts for each resource group
     result_dict = {}
-    threads = []
 
     # Create threads for counting resources in each resource group
+    threads = []
     for resource_group in resource_groups:
-        thread = threading.Thread(target=count_resources_in_resource_group, args=(credential, subscription_id, resource_group.name, result_dict))
+        thread = threading.Thread(target=count_resources_in_resource_group,
+                                  args=(credential, subscription_id, resource_group.name, result_dict))
         threads.append(thread)
         thread.start()
 
@@ -163,56 +198,76 @@ def process_subscription_with_progress_bar(credential, subscription, csv_writer)
         "Web Apps": 0,
         "Container Instances": 0,
         "AKS Clusters": 0,
-        "ACR Repositories": 0,
+        "ACR Registries": 0,
         "ACR Images": 0,
         "Azure Functions": 0,
     }
 
-    for resource_group, counts in result_dict.items():
+    for counts in result_dict.values():
         for resource_type, count in counts.items():
             total_counts[resource_type] += count
 
+    # Log total counts for each resource type
+    for resource_type, count in total_counts.items():
+        logging.info(f"Total {resource_type}: {count}")
+
+    # Log a message if no resources are found for any type
+    for resource_type, count in total_counts.items():
+        if count == 0:
+            logging.info(f"No {resource_type} found in Subscription ID {subscription_id}")
+    # Append counts to the CSV for this subscription
     csv_writer.writerow([subscription_id] + list(total_counts.values()))
-    logging.info(f"Counts for Subscription {subscription_id} saved in CSV")
+    logging.info(f"Counts for Subscription ID {subscription_id} saved in CSV")
+    logging.info("-" * 50)
 
 
+
+
+# Main function to process subscriptions
 def main():
     client_id = input("Enter Azure Client ID: ")
     client_secret = input("Enter Azure Client Secret: ")
     tenant_id = input("Enter Azure Tenant ID: ")
 
+    # Authenticate and create Azure credential
     credential = authenticate_client(client_id, client_secret, tenant_id)
 
+    # List Azure subscriptions
     subscriptions = list_subscriptions(credential)
     logging.info(f"Total Subscriptions: {len(subscriptions)}")
     logging.info("-" * 50)
 
-    # Prompt the user to select the subscription
-    print("Select an option:")
-    print("1. Process all subscriptions")
-    print("2. Process a single subscription")
-    option = input("Enter your choice (1/2): ")
-
-    with open('azure_resource_counts.csv', mode='w', newline='') as csv_file:
+    # Create or append to the CSV file
+    csv_exists = os.path.exists(CSV_FILE_PATH)
+    with open(CSV_FILE_PATH, mode='a', newline='') as csv_file:
         csv_writer = csv.writer(csv_file)
-        # Added headers for each resource type
-        csv_writer.writerow(['Subscription ID', 'Virtual Machines', 'Web Apps', 'Container Instances', 'AKS Clusters',
-                             'ACR Repositories', 'ACR Images', 'Azure Functions'])
+
+        # Write header row if the CSV file is newly created
+        if not csv_exists:
+            csv_writer.writerow(['Subscription ID', 'Virtual Machines', 'Web Apps', 'Container Instances', 'AKS Clusters',
+                                 'ACR Registries', 'ACR Images', 'Azure Functions'])
+
+        # Prompt the user to select the option
+        print("Select an option:")
+        print("1. Process all subscriptions")
+        print("2. Process a single subscription")
+        option = input("Enter your choice (1/2): ")
 
         if option == "1":
+            # Process all subscriptions
             pbar = tqdm(subscriptions, desc="Processing Subscriptions", unit="subscription")
             for subscription in pbar:
-                process_subscription_with_progress_bar(credential, subscription, csv_writer)
+                process_subscription(credential, subscription, csv_writer)
         elif option == "2":
+            # Process a single subscription
             subscription_id = input("Enter the Subscription ID to process: ")
             subscription = next((sub for sub in subscriptions if sub.subscription_id == subscription_id), None)
             if subscription:
-                process_subscription_with_progress_bar(credential, subscription, csv_writer)
+                process_subscription(credential, subscription, csv_writer)
             else:
                 print("Subscription not found.")
         else:
             print("Invalid option. Please select 1 or 2.")
-
 
 if __name__ == "__main__":
     main()
