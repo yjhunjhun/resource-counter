@@ -37,7 +37,7 @@ Before running the script, ensure you have the following:
   - `roles/compute.viewer` for counting compute instances.
   - `roles/cloudfunctions.viewer` for counting Cloud Functions.
   - `roles/container.viewer` for counting GKE clusters.
-  - `roles/artifactregistry.viewer` for listing Artifact Registry repositories and images.
+  - `roles/artifactregistry.reader` for listing Artifact Registry repositories and images.
   - `roles/browser` for viewing organizations and folders in GCP.
   - `roles/resourcemanager.folderViewer` for viewing folders and projects within the organization.
   - Ensure the service account has at least read access to the GCP resources you want to count.
