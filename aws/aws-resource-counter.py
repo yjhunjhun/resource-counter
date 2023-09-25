@@ -5,11 +5,29 @@ import csv
 import logging
 
 # Configure logging to write to a file
-log_file_name = "resource_count.log"
+log_file_name = "aws_resource_count.log"
 logging.basicConfig(filename=log_file_name, level=logging.INFO, format='%(levelname)s: %(message)s')
 
 # Define the CSV file name
-csv_file_name = "resource_counts.csv"
+csv_file_name = "aws_resource_counts.csv"
+
+def get_management_account_id(management_session):
+    """
+    Get the AWS account ID of the management account in the organization.
+
+    Args:
+        management_session (boto3.Session): Session for the management account.
+
+    Returns:
+        str: AWS account ID of the management account.
+    """
+    org_client = management_session.client('organizations')
+    try:
+        response = org_client.describe_organization()
+        return response['Organization']['MasterAccountId']
+    except Exception as e:
+        logging.error(f"Error getting management account ID: {e}")
+        return None
 
 def assume_role_and_get_session(account_id, role_name, session_name, management_session):
     """
@@ -236,20 +254,85 @@ def count_resources(input_type, management_access_key, management_secret_key):
         aws_secret_access_key=management_secret_key
     )
 
-    # Check if the provided credentials are for the Management/root account
-    org_client = management_session.client('organizations')
+    # Get the management account ID
+    management_account_id = get_management_account_id(management_session)
 
-    try:
-        management_account_id = org_client.describe_organization()['Organization']['MasterAccountId']
-        is_management_account = True
-    except Exception as e:
-        is_management_account = False
+    if not management_account_id:
+        logging.error("Failed to retrieve the management account ID.")
+        exit()
+
+    # Create an org_client outside of the if block
+    org_client = management_session.client('organizations')
 
     # Create a list to store the results
     results = []
 
     # Organization-level resource counting
     if input_type == 'org':
+        # Gather resources for the management account using provided credentials
+        # Get the list of active regions for the management account
+        active_regions, regions_error = get_active_regions(management_session)
+
+        if regions_error:
+            logging.error(f"Error getting active regions for the management account: {regions_error}")
+            exit()
+
+        # Initialize counts to zero for the management account
+        total_running_ec2_instances = 0
+        total_lambda_function_count = 0
+        total_ecs_fargate_task_count = 0
+        total_eks_instance_count = 0
+        total_ecr_repository_count = 0
+        total_ecr_image_count = 0
+
+        # Iterate over active regions and count resources concurrently
+        with ThreadPoolExecutor(max_workers=30) as executor:
+            resource_counts = list(executor.map(
+                count_resources_in_region,
+                [management_session] * len(active_regions),
+                active_regions
+            ))
+
+        # Aggregate resource counts from different regions
+        for counts in resource_counts:
+            total_running_ec2_instances += counts['running_ec2_instances']
+            total_lambda_function_count += counts['lambda_functions']
+            total_ecs_fargate_task_count += counts['ecs_fargate_tasks']
+            total_eks_instance_count += counts['eks_instances']
+            total_ecr_repository_count += counts['ecr_repositories']
+            total_ecr_image_count += counts['ecr_images']
+
+        # Print the total counts for the management account
+        logging.info(f"  Management Account {management_account_id} Resource Counts:")
+        logging.info(f"  Total Running EC2 Instances: {total_running_ec2_instances}")
+        logging.info(f"  Total Lambda Functions: {total_lambda_function_count}")
+        logging.info(f"  Total ECS Fargate Tasks: {total_ecs_fargate_task_count}")
+        logging.info(f"  Total EKS Instances: {total_eks_instance_count}")
+        logging.info(f"  Total ECR Repositories: {total_ecr_repository_count}")
+        logging.info(f"  Total ECR Images: {total_ecr_image_count}\n")
+
+        # Append the results to the list
+        results.append([
+            management_account_id,
+            total_running_ec2_instances,
+            total_lambda_function_count,
+            total_ecs_fargate_task_count,
+            total_eks_instance_count,
+            total_ecr_repository_count,
+            total_ecr_image_count
+        ])
+
+        # Append the results to the CSV file immediately
+        with open(csv_file_name, 'a', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file)
+
+            # Write the data rows to the CSV file
+            csv_writer.writerows(results)
+
+        # Clear results for the next member account
+        results.clear()
+
+        # Gather resources for member accounts
         # List all member account IDs within the organization with progress bar
         member_account_ids = []
 
@@ -380,6 +463,21 @@ def count_resources(input_type, management_access_key, management_secret_key):
             total_ecr_repository_count += counts['ecr_repositories']
             total_ecr_image_count += counts['ecr_images']
 
+        # Create the CSV file if it doesn't exist and write the header row
+        with open(csv_file_name, 'w', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file)
+
+            # Write the header row
+            csv_writer.writerow([
+                "Account ID",
+                "Total Running EC2 Instances",
+                "Total Lambda Functions",
+                "Total ECS Fargate Tasks",
+                "Total EKS Instances",
+                "Total ECR Repositories",
+                "Total ECR Images"
+            ])
+
         # Print the total counts for the account
         logging.info(f"Account {account_id} Resource Counts:")
         logging.info(f"  Total Running EC2 Instances: {total_running_ec2_instances}")
@@ -426,7 +524,7 @@ if __name__ == "__main__":
         exit()
 
     # Take user input for Management Account credentials
-    management_access_key = input("Enter Management Account Access Key: ")
-    management_secret_key = input("Enter Management Account Secret Key: ")
+    management_access_key = input("Enter Account Access Key: ")
+    management_secret_key = input("Enter Account Secret Key: ")
 
     count_resources(input_type, management_access_key, management_secret_key)
