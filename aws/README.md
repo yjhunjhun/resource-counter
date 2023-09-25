@@ -1,4 +1,4 @@
-# AWS Resource Counter
+![image](https://github.com/yjhunjhun/resource-counter/assets/104092359/f6d49174-e5e4-4132-9642-8df109ce7601)# AWS Resource Counter
 
 **Author**: Yash Jhunjhunwala
 
@@ -37,28 +37,62 @@ To run this script successfully, you need to ensure that the AWS IAM user or rol
 - organizations:ListAccounts and organizations:ListAccountsForParent: Permissions to list AWS accounts within the organization.
 - organizations:DescribeOrganization and organizations:DescribeOrganizationalUnit: Permissions to describe the organization's structure.
 - ec2:DescribeInstances: Permission to describe EC2 instances.
+- ec2:DescribeRegions: Permission to describe EC2 regions.
 - lambda:ListFunctions: Permission to list Lambda functions.
 - ecs:ListClusters and ecs:ListTasks: Permissions to list ECS clusters and tasks.
 - eks:ListClusters: Permission to list EKS clusters.
 - ecr:DescribeRepositories and ecr:DescribeImages: Permissions to describe ECR repositories and images.
 Ensure that the IAM user or role you use has these permissions attached. You can configure these permissions using the AWS IAM console or by updating the IAM policy associated with the user or role.
-
+- Sample Policy for the user
+```hcl
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "memberaccountsaccess",
+            "Effect": "Allow",
+            "Action": "sts:AssumeRole",
+            "Resource": [
+                "arn:aws:iam::*:role/OrganizationAccountAccessRole"
+            ]
+        },
+        {
+            "Sid": "scriptaccess",
+            "Effect": "Allow",
+            "Action": [
+                "organizations:ListAccounts",
+                "organizations:DescribeOrganization",
+                "ec2:DescribeInstances",
+                "lambda:ListFunctions",
+                "ecs:ListClusters",
+                "ecs:ListTasks",
+                "eks:ListClusters",
+                "ecr:DescribeRepositories",
+                "ecr:DescribeImages"
+            ],
+            "Resource": [
+                "*"
+            ]
+        }
+    ]
+}
+```
 ## Getting Started
 Follow these steps to get started with AWS Resource Counter:
 
 ### Installation
 1. Clone the repository to your local machine:
    ```shell
-   git clone https://github.com/yjhunjhun/aws-resource-counter.git
+   git clone https://github.com/yjhunjhun/resource-counter.git
 2. Change to the project directory:
    ```shell
-   cd aws-resource-counter
+   cd resource-counter/aws
 3. Install the required Python packages using pip:
    ```shell 
-   pip install -r requirements.txt
+   pip3 install -r requirements.txt
 4. To count AWS resources, run the script and follow the prompts.
    ```shell
-   python aws_resource_counter.py
+   python3 aws-resource-counter.py
 5. Select the resource counting type (organization or account).
 6. Provide the Management Account Access Key and Secret Key when prompted.
 7. The script will start counting resources across your organization or account and display progress using TQDM (if installed).
