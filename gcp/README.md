@@ -55,7 +55,7 @@ Before running the script, ensure you have the following:
 
 3. Navigate to the project directory:
    ```bash
-   pip install -r requirements.txt
+   pip3 install -r requirements.txt
 
 4. To count AWS resources, run the script and follow the prompts.
    ```shell
