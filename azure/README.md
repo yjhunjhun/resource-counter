@@ -29,20 +29,20 @@ Follow these steps to use the script:
 
 1. Clone this GitHub repository to your local machine:
 ```bash
-git clone https://github.com/jhunjhun/resource-counter/azure-resource-counter.git
+git clone https://github.com/yjhunjhun/resource-counter.git
 ```
 
 2. Change your working directory to the project folder:
 ```bash
-cd azure-resource-counter
+cd resource-counter/azure
 ```
 3. Install the required Python packages using pip:
 ```bash
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 
 4. Run the script:
 ```bash
-python azure_resource_counter.py
+python3 azure-resource-counter.py
 ```
 5. you will be prompted to enter the Azure Client ID, Client Secret, and Tenant ID. Provide these details to authenticate the script.
 
