@@ -1,4 +1,4 @@
-![image](https://github.com/yjhunjhun/resource-counter/assets/104092359/f6d49174-e5e4-4132-9642-8df109ce7601)# AWS Resource Counter
+# AWS Resource Counter
 
 **Author**: Yash Jhunjhunwala
 
@@ -83,13 +83,15 @@ Follow these steps to get started with AWS Resource Counter:
 ### Installation
 1. Clone the repository to your local machine:
    ```shell
-   git clone https://github.com/yjhunjhun/resource-counter.git
+   git clone https://github.com/Qualys/totalcloud_resource_counter.git
 2. Change to the project directory:
    ```shell
-   cd resource-counter/aws
-3. Install the required Python packages using pip:
-   ```shell 
-   pip3 install -r requirements.txt
+   cd totalcloud_resource_counter/aws
+3. Install dependencies in a virtual environment (recommended):
+   ```shell
+   python -m venv venv
+   source venv/bin/activate  # On Windows, use: venv\Scripts\activate
+   pip install -r requirements.txt
 4. To count AWS resources, run the script and follow the prompts.
    ```shell
    python3 aws-resource-counter.py
